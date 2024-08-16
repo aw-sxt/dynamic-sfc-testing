@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple HTML Page</title>
+    <link rel="stylesheet" href="css/styles.css">
+	<script src="https://unpkg.com/@isomorphic-git/lightning-fs"></script>
+	<script src="https://unpkg.com/isomorphic-git@beta"></script>
+	<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader/dist/vue3-sfc-loader.js"></script>
+</head>
+<body>
+	<div id="counter">
+		<counter/>
+	</div> 
+	<div id="foo">
+		<foo/>
+	</div> 
+    <script async type="module">	
+		import http from 'https://unpkg.com/isomorphic-git@beta/http/web/index.js'
+		import { createApp } from 'https://unpkg.com/vue@3/dist/vue.esm-browser.js';
+		const { loadModule, version } = window["vue3-sfc-loader"];
+
+		// init filesystem
+		window.fs = new LightningFS('fs');
+		window.pfs = window.fs.promises;
+
+		function setGitConfig(projectName) {
+			const targetDir = `/example`;
+			// probably should have this be like a session id or something in the future
+			const gitUsername = 'abc'
+
+			git.setConfig({
+				fs: fs,
+				dir: targetDir,
+				path: 'user.name',
+				value: gitUsername
+			})
+		}
+		function cloneProjectSource() {
+			const targetDir = `/example`;
+			let CORS_PROXY = "https://cors.isomorphic-git.org"
+			let COMMIT_DEPTH = 1;
+
+			let hostname = "github.com";
+			let pathname = `/aw-sxt/dynamic-sfc-testing.git`
+
+			// clone the repo
+			git.clone({
+				fs: fs,
+				http,
+				dir: targetDir,
+				corsProxy: CORS_PROXY,
+				url: `https://${hostname}${pathname}`,
+				ref: 'main',
+				singleBranch: true,
+				depth: COMMIT_DEPTH
+			})
+
+			// set the config
+			setGitConfig();
+
+		}
+		async function getFileContent(filename) {
+			let response = await window.pfs.readFile(`/example/components/${filename}`, 'utf8');
+			return response;
+		}
+		async function getComponents() {
+			let response = await window.pfs.readdir('/example/components');
+			return response;
+		}
+
+		// clone the repo 
+		cloneProjectSource();
+
+		// create app instances
+		for (const filename of (await getComponents())) {
+			const appInstance = Vue.createApp({});
+			appInstance.config.errorHandler = (err, instance, info) => {
+				console.log({
+					err,
+					instance,
+					info
+				})
+			}			
+			const componentName = `${filename.replace(".vue", "")}`;
+			appInstance.component(
+				componentName, 
+				Vue.defineAsyncComponent(() => loadModule(
+					filename,
+					{
+						moduleCache: { vue: Vue },
+						getFile: (filename) => getFileContent(filename).then((response) => {return response;}),
+						addStyle: () => {},
+					}
+				))
+			);
+			appInstance.mount(`#${componentName}`);
+		}
+	
+	</script>
+</body>
+</html>
